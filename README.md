@@ -44,7 +44,14 @@ We can also view the same data using semi-log scaling.
 
 
 
-One can insert multiple search criteria. For example, ... #any #all
+One can insert multiple search criteria. It should be noted that an error will be raised if the search criteria is not satisfied/
+
+    regions, timeseries = DB.select_regions(parameters='country', conditions='equal', values=('Japan', 'Italy'))
+    > ValueError: no matches found
+
+
+
+For example, ... #any #all
 
 
 
