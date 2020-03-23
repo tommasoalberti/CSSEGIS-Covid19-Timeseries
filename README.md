@@ -18,16 +18,14 @@ The purpose of this code is to simplify the structure of the provided data to be
 
 **Example:**
 
-Make sure to specify `directory` that contains the folders `Data` and `PyCodes`. The methods in the constructor of `DataBase` are used to load data from each of the files into dictionaries such that all key-value pairs match by row index. 
+Make sure to specify `directory` that contains the folders `Data` and `PyCodes`. The methods in the constructor of `DataBase` are used to load data from each of the files into dictionaries such that all key-value pairs match by row index. Data corresponding to empty fields are replaced with `'N/A'` or `'NaN'` where appropriate. 
 
     from data_processing import *
 
     directory = '/Users/.../'
     DB = DataBase(directory)
 
-Then, one can obtain data that corresponds to input search criteria. As of now, this code can only search by region; I plan to implement a search-by-timeseries functionality. The parameters that correspond to these regions are: `'country'`, `'province'` (do not use `'state'`), `'county'`, `'longitude'`, and `'latitude'`. Data corresponding to empty fields are replaced with `'N/A'` or `'NaN'` where appropriate. 
-
-For example, say we want to obtain all timeseries data about Japan.
+Then, one can obtain data that corresponds to input search criteria. For example, say we want to obtain all timeseries data about Japan.
 
     regions, timeseries = DB.select_regions(parameters='country', conditions='equal', values='Japan')
 
@@ -41,7 +39,6 @@ We can also view the same data using semi-log scaling.
     DB.view_case_comparison(regions, timeseries, scale='log')
 
 ![Example: Japan via semi-log scale](https://images2.imgbox.com/6b/b3/SGiBZzqV_o.png)
-
 
 
 One can insert multiple search criteria. It should be noted that an error will be raised if the search criteria is not satisfied.
@@ -67,5 +64,5 @@ The calls to `DB.view_case_comparison` shown below will output a separate figure
 
 ![Example: Italy via semi-log scale](https://images2.imgbox.com/1b/33/0LrPnAqg_o.png)
 
-One can apply this logic to also obtain data by searching longitudes/latitudes, or to select data by provinces and/or counties.  
+This logic can be also be applied to other regional parameters; I plan to implement a search-by-timeseries functionality. These regional parameters are: `'country'`, `'province'` (do not use `'state'`), `'county'`, `'longitude'`, and `'latitude'`. 
 
