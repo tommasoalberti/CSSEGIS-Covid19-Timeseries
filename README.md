@@ -10,9 +10,11 @@ Minimum Requirements:
 
 **Synopsis:**
 
-The 2019-2020 Coronavirus Pandemic is an ongoing global pandemic. The data consisting of multiple daily timeseries by case was made publically available by [JHU CSSE](https://github.com/CSSEGISandData/COVID-19). 
+The 2019-2020 Coronavirus Pandemic is an ongoing global pandemic. The data, which was made publically available by [JHU CSSE](https://github.com/CSSEGISandData/COVID-19) and is updated daily, consists of multiple daily timeseries by case (confirmed, death, and recovery). 
 
-Everyday, JHU CSSE updates three daily timeseries files, which show frequencies of confirmed cases, death cases, and recovery cases, respectively. Counterintuitively, the ordering of the rows of each file do not necessarily correspond to the ordering of the rows in the other files; this ordering also changes with each daily update. To make matters more confusing, one can find find multiple representations of the same locations in these files. For example, each of the publically provided files contains a row pertaining to `State/Province: California` and `County: ''`, yet the `State/Province` will be `CA` for every non-empty `county`. The purpose of this code is to simplify the structure of the provided data; it may evolve into an exploratory analysis in the future. 
+Counterintuitively, the ordering of the rows of each file do not necessarily correspond to the ordering of the rows in the other files; this ordering also changes with each daily update. To make matters more confusing, one can find find multiple representations of the same locations in these files. For example, each of the publically provided files contains a row pertaining to `State/Province: California` and `County: ''`, yet the `State/Province` will be `CA` for every non-empty `county`. 
+
+The purpose of this code is to simplify the structure of the provided data to be less counterintuitive; it may evolve into an exploratory analysis in the future. 
 
 **Example:**
 
