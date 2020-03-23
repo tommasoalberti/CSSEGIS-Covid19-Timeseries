@@ -25,7 +25,7 @@ Make sure to specify `directory` that contains the folders `Data` and `PyCodes`.
     directory = '/Users/.../'
     DB = DataBase(directory)
 
-Then, one can obtain data that corresponds to input search criteria. As of now, this code can only search by region; I plan to implement a search-by-timeseries functionality. The parameters that correspond to these regions are: `'country'`, `'province'`, `'county'`, `'longitude'`, and `'latitude'`. 
+Then, one can obtain data that corresponds to input search criteria. As of now, this code can only search by region; I plan to implement a search-by-timeseries functionality. The parameters that correspond to these regions are: `'country'`, `'province'` (do not use `'state'`), `'county'`, `'longitude'`, and `'latitude'`. Data corresponding to empty fields are replaced with `'N/A'` or `'NaN'` where appropriate. 
 
 For example, say we want to obtain all timeseries data about Japan.
 
@@ -44,28 +44,28 @@ We can also view the same data using semi-log scaling.
 
 
 
-One can insert multiple search criteria. It should be noted that an error will be raised if the search criteria is not satisfied/
+One can insert multiple search criteria. It should be noted that an error will be raised if the search criteria is not satisfied.
 
     regions, timeseries = DB.select_regions(parameters='country', conditions='equal', values=('Japan', 'Italy'))
-    > ValueError: no matches found
+    ValueError: no matches found
 
+This can be accounted for by specifying `apply_to='any'` (default is `'all'`).
 
+    regions, timeseries = DB.select_regions(parameters='country', conditions='equal', values=('Japan', 'Italy'), apply_to='any')
 
-For example, ... #any #all
+Note that `parameters='country'` and `conditions='equal'` are applied to both `'Japan'` and `'Italy'` in `values`; alternatively, one could obtain the same output by:
 
+    regions, timeseries = DB.select_regions(parameters=('country', 'country'), conditions=('equal', 'equal'), values=('Japan', 'Italy'), apply_to='any')
 
+The calls to `DB.view_case_comparison` shown below will output a separate figure for Japan and Italy, respectively.
 
-    # regions, timeseries = DB.select_regions(parameters=('country', 'country'), conditions='equal', values=('Germany', 'Saudi Arabia'), apply_to='any')
-    # regions, timeseries = DB.select_regions(parameters='country', conditions='equal', values=('Germany', 'Saudi Arabia', 'Australia', 'Canada'), apply_to='any')
-    # regions, timeseries = DB.select_regions(parameters='country', conditions='equal', values='Canada', apply_to='any')
-    # regions, timeseries = DB.select_regions(parameters='country', conditions='equal', values='Australia', apply_to='any')
-    # regions, timeseries = DB.select_regions(parameters='country', conditions='equal', values='Germany')
-    # regions, timeseries = DB.select_regions(parameters='country', conditions='equal', values='China')
-    # regions, timeseries = DB.select_regions(parameters='province', conditions='equal', values='California')
-    # regions, timeseries = DB.select_regions(parameters=('province', 'county'), conditions=('not equal', 'not equal'), values=('N/A', 'N/A'))
-    # regions, timeseries = DB.select_regions(parameters=('province', 'county'), conditions=('equal', 'not equal'), values=('California', 'N/A'))
-    # regions, timeseries = DB.select_regions(parameters=('province', 'county'), conditions=('equal', 'equal'), values=('California', 'Los Angeles'))
-    # regions, timeseries = DB.select_regions(parameters=('county', 'province', 'province'), conditions=('equal', 'equal', 'equal'), values=('Los Angeles', 'New York', 'Washington'), apply_to='any')
-    # regions, timeseries = DB.select_regions(parameters='county', conditions='equal', values=('Los Angeles', 'Humboldt County', 'Orange County', 'San Fransisco County', 'Riverside County', 'Fresno County', 'Santa Cruz', 'Ventura County', 'Shasta County', 'San Diego County'), apply_to='any')
+    DB.view_case_comparison(regions, timeseries)
 
+![Example: Italy via linear scale](https://images2.imgbox.com/78/e8/W67OS1YL_o.png)
+
+    DB.view_case_comparison(regions, timeseries, scale='log')
+
+![Example: Italy via semi-log scale](https://images2.imgbox.com/1b/33/0LrPnAqg_o.png)
+
+One can apply this logic to also obtain data by searching longitudes/latitudes, or to select data by provinces and/or counties.  
 
