@@ -1,21 +1,21 @@
 from condition_mapping import *
 from visual_configuration import *
 
+import os
 import datetime
 import csv
 
 class DataBase(VisualConfiguration):
 
-    def __init__(self, directory):
+    def __init__(self, directory, ticksize=7, labelsize=8, textsize=5, titlesize=9, headersize=10, cellsize=15):
         """
 
         """
-        super().__init__()
-        self.directory = directory
+        super().__init__(directory, ticksize, labelsize, textsize, titlesize, headersize, cellsize)
+        self.source = dict(CSSE='https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data')
         self.path_confirmed = '{}Data/time_series_19-covid-Confirmed.csv'.format(directory)
         self.path_dead = '{}Data/time_series_19-covid-Deaths.csv'.format(directory)
         self.path_recovered = '{}Data/time_series_19-covid-Recovered.csv'.format(directory)
-        self.source = dict(CSSE='https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data')
         self._raw_data = None
         self._headers = None
         self._datetimes = None
@@ -106,23 +106,6 @@ class DataBase(VisualConfiguration):
             _data = csv.reader(data_file, delimiter=',', quotechar='"')
             return np.array([data for data in _data], dtype=str)
 
-    def load_raw_data(self):
-        _confirmed = self.get_data_from_file(self.path_confirmed)
-        _dead = self.get_data_from_file(self.path_dead)
-        _recovered = self.get_data_from_file(self.path_recovered)
-        if not np.all((_confirmed[0, :] == _dead[0, :]) & (_dead[0, :] == _recovered[0, :])):
-            raise ValueError("headers for confirmed/dead/recovered do not match")
-        self._raw_data = {'confirmed' : _confirmed, 'dead' : _dead, 'recovered' : _recovered}
-        self._headers = {'identifier' : _confirmed[0, :4], 'timeseries' : _confirmed[0, 4:]}
-
-    def load_datetimes(self):
-        _datetimes = []
-        dts = np.core.defchararray.split(self.headers['timeseries'], sep='/')
-        for dt in dts:
-            _datetimes.append(datetime.datetime(month=int(dt[0]), day=int(dt[1]), year=int('20' + dt[2])))
-        self._datetimes = np.array(_datetimes)
-        self._x = np.unique(_datetimes)
-
     @staticmethod
     def autocorrect_row_ordering_by_province(data_a, data_b):
         """
@@ -139,6 +122,70 @@ class DataBase(VisualConfiguration):
                     _row = mapping[mapping_key[0]]
                     data_b[[_row, row]] = data_b[[row, _row]]
         return data_a, data_b
+
+    @staticmethod
+    def autocorrect_timeseries(timeseries):
+        condition = (timeseries == '')
+        timeseries[condition] = 'NaN'
+        return timeseries.astype(float)
+
+    @staticmethod
+    def get_region_name(country, province, county):
+        """
+
+        """
+        if county == 'N/A':
+            if province == 'N/A':
+                s = '{}'.format(country)
+            else:
+                s = '{}, {}'.format(province, country)
+        else:
+            s = '{}: {}, {}'.format(country, county, province)
+        return s
+
+    @staticmethod
+    def get_file_modification_timestamp(path):
+        """
+
+        """
+        t = os.path.getmtime(path)
+        return datetime.datetime.fromtimestamp(t)
+
+    def get_consolidated_file_timestamps(self, max_seconds=120):
+        """
+
+        """
+        if max_seconds < 0:
+            raise ValueError("max_seconds must be greater than or equal to zero")
+        dt_confirmed = self.get_file_modification_timestamp(self.path_confirmed)
+        dt_dead = self.get_file_modification_timestamp(self.path_dead)
+        dt_recovered = self.get_file_modification_timestamp(self.path_recovered)
+        deltas = np.array([dt.total_seconds() for dt in np.diff([dt_confirmed, dt_dead, dt_recovered])])
+        # 'updated' -->? 'modified'
+        if np.all(deltas == 0):
+            s = 'last updated: {}'.format(dt_confirmed)
+        elif np.all(deltas <= max_seconds):
+            s = 'last updated: {}, {}, {}'.format(dt_confirmed, dt_dead, dt_recovered)
+        else:
+            raise ValueError("files were last updated more than {} seconds apart".format(max_seconds))
+        return s
+
+    def load_raw_data(self):
+        _confirmed = self.get_data_from_file(self.path_confirmed)
+        _dead = self.get_data_from_file(self.path_dead)
+        _recovered = self.get_data_from_file(self.path_recovered)
+        if not np.all((_confirmed[0, :] == _dead[0, :]) & (_dead[0, :] == _recovered[0, :])):
+            raise ValueError("headers for confirmed/dead/recovered do not match")
+        self._raw_data = {'confirmed' : _confirmed, 'dead' : _dead, 'recovered' : _recovered}
+        self._headers = {'identifier' : _confirmed[0, :4], 'timeseries' : _confirmed[0, 4:]}
+
+    def load_datetimes(self):
+        _datetimes = []
+        dts = np.core.defchararray.split(self.headers['timeseries'], sep='/')
+        for dt in dts:
+            _datetimes.append(datetime.datetime(month=int(dt[0]), day=int(dt[1]), year=int('20' + dt[2])))
+        self._datetimes = np.array(_datetimes)
+        self._x = np.unique(_datetimes)
 
     def load_data(self):
         _confirmed, _dead = self.autocorrect_row_ordering_by_province(self.raw_data['confirmed'], self.raw_data['dead'])
@@ -166,9 +213,9 @@ class DataBase(VisualConfiguration):
         self._counties = np.array(_counties)
         self._longitudes = _confirmed[1:, 2].astype(float)
         self._latitudes = _confirmed[1:, 3].astype(float)
-        self._confirmed = _confirmed[1:, 4:].astype(int)
-        self._dead = _dead[1:, 4:].astype(int)
-        self._recovered = _recovered[1:, 4:].astype(int)
+        self._confirmed = self.autocorrect_timeseries(_confirmed[1:, 4:])
+        self._dead = self.autocorrect_timeseries(_dead[1:, 4:])
+        self._recovered = self.autocorrect_timeseries(_recovered[1:, 4:])
 
     def load_regions(self):
         regions = dict()
@@ -198,14 +245,30 @@ class DataBase(VisualConfiguration):
         timeseries = {key : value[indices] for key, value in self.timeseries.items()}
         return regions, timeseries
 
-    # def select_timeseries(self, parameters=None, conditions=None, values=None, apply_to='all', modifiers=None):
-    #     """
-    #
-    #     """
-    #     S = self.searchers['timeseries']
-    #     raise ValueError("not yet implemented")
+    def select_timeseries(self, parameters=None, conditions=None, values=None, apply_to='all', modifiers=None):
+        """
 
-    def view_case_comparison(self, regions, timeseries, scale='linear', xmajor='month', xminor='day', xfmt="%Y-%m-%d", xrotation=15, facecolors='rgb', save=False, **kwargs):
+        """
+        S = self.searchers['timeseries']
+        raise ValueError("not yet implemented")
+
+    def combine_data(self, regions, timeseries):
+        """
+
+        """
+        _regions = {key : [] for key in list(self.regions.keys())}
+        _timeseries = {key : [] for key in list(self.timeseries.keys())}
+        for region in regions:
+            for key, value in region.items():
+                _regions[key].extend(value.tolist())
+        for series in timeseries:
+            for key, value in series.items():
+                _timeseries[key].extend(value.tolist())
+        _regions = {key : np.array(value) for key, value in _regions.items()}
+        _timeseries = {key : np.array(value) for key, value in _timeseries.items()}
+        return _regions, _timeseries
+
+    def view_case_comparisons_per_location(self, regions, timeseries, scale='linear', xmajor='month', xminor='day', xfmt="%Y-%m-%d", xrotation=15, facecolors='rgb', save=False, **kwargs):
         """
 
         """
@@ -215,55 +278,185 @@ class DataBase(VisualConfiguration):
         alpha = 1/nc
         for country, province, county, confirmed, dead, recovered in zip(regions['country'], regions['province'], regions['county'], timeseries['confirmed'], timeseries['dead'], timeseries['recovered']):
             fig, ax = plt.subplots(**kwargs)
-            if county == 'N/A':
-                if province == 'N/A':
-                    title = '{}'.format(country)
+            title = self.get_region_name(country, province, county)
+            for y, label, facecolor, linestyle in zip((confirmed, dead, recovered), ('Confirmed', 'Dead', 'Recovered'), facecolors, ('-', '-.', '--')):
+                condition = (y > 0)
+                if scale == 'linear':
+                    ax.plot(self.x[condition], y[condition], color=facecolor, label=label, alpha=alpha, linestyle=linestyle)
                 else:
-                    title = '{}, {}'.format(province, country)
-            else:
-                title = '{}: {}, {}'.format(country, county, province)
-            for y, label, facecolor, linestyle in zip((confirmed, dead, recovered), ('cofirmed', 'dead', 'recovered'), facecolors, ('-', '-.', '--')):
-                ax.plot(self.x, y, color=facecolor, label=label, alpha=alpha, linestyle=linestyle)
+                    # ax.semilogy(self.x[condition], y[condition], color=facecolor, label=label, alpha=alpha, linestyle=linestyle)
+                    ax.plot(self.x[condition], y[condition], color=facecolor, label=label, alpha=alpha, linestyle=linestyle)
             ax = self.transform_x_as_datetime(ax, xmajor, xminor, xfmt, xrotation)
             ax.set_xlabel('Date', fontsize=self.labelsize)
             ax.set_ylabel('Frequency of Cases', fontsize=self.labelsize)
-            ax = self.update_y_scaling(ax, scale, base=10)
+            ax = self.update_y_scaling(ax, scale)
             ax.tick_params(axis='both', which='both', labelsize=self.ticksize)
             ax.grid(color='k', linestyle=':', alpha=0.3)
+            ax.set_xlim([self.x[0], self.x[-1]])
             ax.set_title(title, fontsize=self.titlesize)
             handles, labels = ax.get_legend_handles_labels()
             handles, labels, ncol = self.autocorrect_legend_entries(ax, handles, labels)
-            kws = dict(handles=handles, labels=labels, ncol=ncol, mode='expand', loc='lower center', fontsize=self.labelsize, borderaxespad=0.1) #, scatterpoints=1)
+            suffix = self.get_consolidated_file_timestamps(max_seconds=120)
+            kws = dict(handles=handles, labels=labels, ncol=ncol, mode='expand', loc='lower center', fontsize=self.labelsize, borderaxespad=0.1)
             fig.subplots_adjust(bottom=0.325)
             leg = fig.legend(**kws)
-            leg = self.update_legend_design(leg, title='Cases via CSSEGIS', textcolor='darkorange', facecolor='k', edgecolor='steelblue')
-            plt.show()
-            plt.close(fig)
+            leg = self.update_legend_design(leg, title='Cases via CSSEGIS/JHU ({})'.format(suffix), textcolor='darkorange', facecolor='k', edgecolor='steelblue')
+            if save:
+                savename = 'per_{}'.format(title.title().replace(' ', '')) + '__{}'.format(scale)
+            else:
+                savename = None
+            self.display_image(fig, savename)
+
+    def view_case_comparisons_by_location(self, regions, timeseries, scale='linear', xmajor='month', xminor='day', xfmt="%Y-%m-%d", xrotation=15, cmap='jet_r', linestyles=(['-', ':']), save=False, **kwargs):
+        """
+
+        """
+        norm = Normalize(vmin=0, vmax=regions['province'].size)
+        vector = np.arange(regions['province'].size).astype(int)
+        facecolors = self.get_facecolors_from_cmap(cmap, norm, vector)
+        linestyles = self.generate_linestyle_cycle(linestyles)
+        alpha = self.autocorrect_transparency(1/vector.size)
+        location_labels = []
+        fig, axes = plt.subplots(nrows=4, ncols=1, **kwargs)
+        axes[-1].axis('off')
+        for country, province, county, confirmed, dead, recovered, facecolor in zip(regions['country'], regions['province'], regions['county'], timeseries['confirmed'], timeseries['dead'], timeseries['recovered'], facecolors):
+            location_label = self.get_region_name(country, province, county)
+            location_labels.append(location_label)
+            linestyle = next(linestyles)
+            for i, (ax, y) in enumerate(zip(axes.ravel(), (confirmed, dead, recovered))):
+                condition = (y > 0)
+                label = location_label if i == 0 else None
+                if scale == 'linear':
+                    ax.plot(self.x[condition], y[condition], color=facecolor, alpha=alpha, linestyle=linestyle, label=label)
+                else:
+                    # ax.semilogy(self.x[condition], y[condition], color=facecolor, alpha=alpha, linestyle=linestyle, label=label)
+                    ax.plot(self.x[condition], y[condition], color=facecolor, alpha=alpha, linestyle=linestyle, label=label)
+        for i, (ax, title) in enumerate(zip(axes[:-1].ravel(), ('Confirmed', 'Dead', 'Recovered'))):
+            ax = self.transform_x_as_datetime(ax, xmajor, xminor, xfmt, xrotation)
+            if i in (0, 1):
+                ax.set_xticklabels([], fontsize=self.ticksize)
+            ax = self.update_y_scaling(ax, scale)
+            ax.tick_params(axis='both', which='both', labelsize=self.ticksize)
+            ax.grid(color='k', linestyle=':', alpha=0.3)
+            ax.set_xlim([self.x[0], self.x[-1]])
+            ax.set_title(title, fontsize=self.titlesize)
+        axes[2].set_xlabel('Date', fontsize=self.labelsize)
+        axes[1].set_ylabel('Frequency of Cases', fontsize=self.labelsize)
+        handles, labels, ncol = self.autocorrect_legend_entries(axes[-1], *axes[0].get_legend_handles_labels())
+        suffix = self.get_consolidated_file_timestamps(max_seconds=120)
+        kws = dict(handles=handles, labels=labels, ncol=ncol, mode='expand', loc='lower center', fontsize=self.labelsize, borderaxespad=0.1)
+        fig.subplots_adjust(hspace=0.375)
+        leg = fig.legend(**kws)
+        leg = self.update_legend_design(leg, title='Cases via CSSEGIS/JHU ({})'.format(suffix), textcolor='darkorange', facecolor='k', edgecolor='steelblue')
+        fig.align_ylabels()
+        if save:
+            savename = "_".join(sorted(location_labels)).title().replace(' ', '') + '__{}'.format(scale)
+        else:
+            savename = None
+        self.display_image(fig, savename)
+        # try:
+        #     self.display_image(fig, savename)
+        # except OSError as e:
+        #     savename = 'multiple_locations__{}'.format(scale)
+        #     self.display_image(fig, savename)
+        # else:
+        #     raise ValueError("see VisualConfiguration.display_image")
+
+    # def view_case_comparisons_by_location(self, regions, timeseries, scale='linear', xmajor='month', xminor='day', xfmt="%Y-%m-%d", xrotation=15, cmap='jet_r', linestyles=(['-', ':']), save=False, **kwargs):
+    #     """
+    #
+    #     """
+    #     norm = Normalize(vmin=0, vmax=regions['province'].size)
+    #     vector = np.arange(regions['province'].size).astype(int)
+    #     facecolors = self.get_facecolors_from_cmap(cmap, norm, vector)
+    #     linestyles = self.generate_linestyle_cycle(linestyles)
+    #     alpha = self.autocorrect_transparency(1/vector.size)
+    #     location_labels = []
+    #     fig, axes = plt.subplots(nrows=4, ncols=1, **kwargs)
+    #     for country, province, county, confirmed, dead, recovered, facecolor in zip(regions['country'], regions['province'], regions['county'], timeseries['confirmed'], timeseries['dead'], timeseries['recovered'], facecolors):
+    #         location_label = self.get_region_name(country, province, county)
+    #         location_labels.append(location_label)
+    #         linestyle = next(linestyles)
+    #         for i, (ax, y) in enumerate(zip(axes.ravel(), (confirmed, dead, recovered))):
+    #             condition = (y > 0)
+    #             if i == 0:
+    #                 ax.plot(self.x[condition], y[condition], color=facecolor, alpha=alpha, linestyle=linestyle, label=location_label)
+    #             else:
+    #                 ax.plot(self.x[condition], y[condition], color=facecolor, alpha=alpha, linestyle=linestyle)
+    #     for i, (ax, title) in enumerate(zip(axes[:-1].ravel(), ('Confirmed', 'Dead', 'Recovered'))):
+    #         ax = self.transform_x_as_datetime(ax, xmajor, xminor, xfmt, xrotation)
+    #         ax = self.update_y_scaling(ax, scale)
+    #         if i in (0, 1):
+    #             ax.set_xticklabels([], fontsize=self.ticksize)
+    #         ax.tick_params(axis='both', which='both', labelsize=self.ticksize)
+    #         ax.set_xlim([self.x[0], self.x[-1]])
+    #         ax.grid(color='k', linestyle=':', alpha=0.3)
+    #         ax.set_title(title, fontsize=self.titlesize)
+    #     axes[2].set_xlabel('Date', fontsize=self.labelsize)
+    #     axes[1].set_ylabel('Frequency of Cases', fontsize=self.labelsize)
+    #     axes[-1].axis('off')
+    #     handles, labels, ncol = self.autocorrect_legend_entries(axes[-1], *axes[0].get_legend_handles_labels())
+    #     suffix = self.get_consolidated_file_timestamps(max_seconds=120)
+    #     kws = dict(handles=handles, labels=labels, ncol=ncol, mode='expand', loc='lower center', fontsize=self.labelsize, borderaxespad=0.1)
+    #     fig.subplots_adjust(hspace=0.4)
+    #     leg = fig.legend(**kws)
+    #     leg = self.update_legend_design(leg, title='Cases via CSSEGIS/JHU ({})'.format(suffix), textcolor='darkorange', facecolor='k', edgecolor='steelblue')
+    #     fig.align_ylabels()
+    #     if save:
+    #         savename = "_".join(sorted(location_labels)).title().replace(' ', '') + '__{}'.format(scale)
+    #     else:
+    #         savename = None
+    #     self.display_image(fig, savename)
+
+    # def view_case_comparisons_per_location(self, regions, timeseries, scale='linear', xmajor='month', xminor='day', xfmt="%Y-%m-%d", xrotation=15, facecolors='rgb', save=False, **kwargs):
+    #     """
+    #
+    #     """
+    #     nc = len(facecolors)
+    #     if nc != 3:
+    #         raise ValueError("invalid number of facecolors: {}".format(nc))
+    #     alpha = 1/nc
+    #     for country, province, county, confirmed, dead, recovered in zip(regions['country'], regions['province'], regions['county'], timeseries['confirmed'], timeseries['dead'], timeseries['recovered']):
+    #         fig, ax = plt.subplots(**kwargs)
+    #         title = self.get_region_name(country, province, county)
+    #         for y, label, facecolor, linestyle in zip((confirmed, dead, recovered), ('Confirmed', 'Dead', 'Recovered'), facecolors, ('-', '-.', '--')):
+    #             condition = (y > 0)
+    #             ax.plot(self.x[condition], y[condition], color=facecolor, label=label, alpha=alpha, linestyle=linestyle)
+    #         ax = self.transform_x_as_datetime(ax, xmajor, xminor, xfmt, xrotation)
+    #         ax.set_xlabel('Date', fontsize=self.labelsize)
+    #         ax.set_ylabel('Frequency of Cases', fontsize=self.labelsize)
+    #         ax = self.update_y_scaling(ax, scale)
+    #         ax.tick_params(axis='both', which='both', labelsize=self.ticksize)
+    #         ax.grid(color='k', linestyle=':', alpha=0.3)
+    #         ax.set_title(title, fontsize=self.titlesize)
+    #         handles, labels = ax.get_legend_handles_labels()
+    #         handles, labels, ncol = self.autocorrect_legend_entries(ax, handles, labels)
+    #         suffix = self.get_consolidated_file_timestamps(max_seconds=120)
+    #         kws = dict(handles=handles, labels=labels, ncol=ncol, mode='expand', loc='lower center', fontsize=self.labelsize, borderaxespad=0.1)
+    #         fig.subplots_adjust(bottom=0.325)
+    #         leg = fig.legend(**kws)
+    #         leg = self.update_legend_design(leg, title='Cases via CSSEGIS/JHU ({})'.format(suffix), textcolor='darkorange', facecolor='k', edgecolor='steelblue')
+    #         if save:
+    #             savename = 'per_{}'.format(title.title().replace(' ', '')) + '__{}'.format(scale)
+    #         else:
+    #             savename = None
+    #         self.display_image(fig, savename)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
 
 
 #
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-##

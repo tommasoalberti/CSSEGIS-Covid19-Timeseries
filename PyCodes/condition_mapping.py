@@ -97,7 +97,8 @@ class ConditionMapping():
         """
         delta = np.abs(data - value)
         loc = np.where(delta == np.min(delta))[0]
-        res = np.array([False for i in range(len(data))])
+        res = np.zeros(len(data), dtype=bool)
+        # res = np.array([False for i in range(len(data))])
         res[loc] = True
         return res
 
@@ -111,7 +112,8 @@ class ConditionMapping():
             loc = np.where(delta == np.min(delta[delta >= 0]))
         except:
             raise ValueError("no forward-nearest match exists")
-        res = np.array([False for i in range(len(data))])
+        res = np.zeros(len(data), dtype=bool)
+        # res = np.array([False for i in range(len(data))])
         res[loc] = True
         return res
 
@@ -125,7 +127,8 @@ class ConditionMapping():
             loc = np.where(delta == np.min(delta[delta >= 0]))[0]
         except:
             raise ValueError("no backward-nearest match exists")
-        res = np.array([False for i in range(len(data))])
+        res = np.zeros(len(data), dtype=bool)
+        # res = np.array([False for i in range(len(data))])
         res[loc] = True
         return res
 
@@ -262,7 +265,8 @@ class ConditionMapping():
                 raise ValueError("invalid condition: {}".format(condition))
             if modifier is not None:
                 if 'delta' in modifier:
-                    base = np.array([False] * (data.size+1))
+                    base = np.zeros(data.size+1, dtype=bool)
+                    # base = np.array([False] * (data.size+1))
                     loc = np.where(res == True)[0]
                     if len(loc) > 0:
                         base[loc] = True
@@ -300,6 +304,7 @@ class Searcher(ConditionMapping):
         else:
             parameters, conditions, values, modifiers = self.autocorrect_search_inputs(parameters, conditions, values, modifiers)
             indices = self.get_indices(self.data, parameters, conditions, values, modifiers)
+            # print("\n .. {} PARTIAL INDICES {}:\n{}, {}\n".format(indices.shape, type(indices), indices, np.any(indices)))
             indices = self.select_conjunction(indices, apply_to, axis=axis)
             if np.all(np.invert(indices)):
                 raise ValueError("no matches found")
